@@ -1,0 +1,76 @@
+name: Only Capture
+
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: Capture kind
+        required: true
+        type: choice
+        options: [url, repo]
+      target:
+        description: Public HTTP(S) URL or repository URL
+        required: true
+        type: string
+      label:
+        description: Optional artifact label
+        required: false
+        type: string
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  capture-dispatch:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Capture
+        env:
+          KIND: ${{ inputs.kind }}
+          TARGET: ${{ inputs.target }}
+          LABEL: ${{ inputs.label }}
+        run: |
+          if [ "$KIND" = "repo" ]; then
+            if [ -n "$LABEL" ]; then PYTHONPATH=src python -m onlylab.cli repo "$TARGET" --label "$LABEL"; else PYTHONPATH=src python -m onlylab.cli repo "$TARGET"; fi
+          else
+            if [ -n "$LABEL" ]; then PYTHONPATH=src python -m onlylab.cli url "$TARGET" --label "$LABEL"; else PYTHONPATH=src python -m onlylab.cli url "$TARGET"; fi
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: only-capture-${{ github.run_id }}
+          path: captures/
+          if-no-files-found: error
+
+  capture-issue:
+    if: >-
+      github.event_name == 'issues' &&
+      github.event.issue.user.login == github.repository_owner &&
+      startsWith(github.event.issue.title, '[only]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Capture from owner issue
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: PYTHONPATH=src python -m onlylab.issue "$ISSUE_BODY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: only-capture-${{ github.run_id }}
+          path: captures/
+          if-no-files-found: error
+      - name: Comment run link
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: gh issue comment "$ISSUE" --body "Capture created. Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

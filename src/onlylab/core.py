@@ -173,7 +173,7 @@ def capture_repo(url: str, root: Path, label: str | None = None) -> Path:
     out = _new(root, label or Path(p.path.rstrip("/")).name.removesuffix(".git") or "repo")
     with tempfile.TemporaryDirectory(prefix="only-") as td:
         repo = Path(td) / "repo"
-        cp = _git("clone", "--depth", "1", "--no-recurse-submodules", url, str(repo))
+        cp = _git("-c", "http.followRedirects=false", "clone", "--depth", "1", "--no-recurse-submodules", url, str(repo))
         if cp.returncode:
             shutil.rmtree(out, ignore_errors=True); raise OnlyError(f"git clone failed: {cp.stderr.strip()[:500]}")
         head = _git("rev-parse", "HEAD", cwd=repo).stdout.strip()

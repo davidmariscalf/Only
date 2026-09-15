@@ -1,0 +1,28 @@
+name: Only capture
+description: Ask Only to capture a URL or public repository without executing it.
+title: "[only] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Owner-only automation. The workflow reads the structured fields below and captures the target without executing target-controlled code.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options: [url, repo]
+    validations:
+      required: true
+  - type: input
+    id: target
+    attributes:
+      label: Target
+      placeholder: https://example.com or https://github.com/owner/repo
+    validations:
+      required: true
+  - type: input
+    id: label
+    attributes:
+      label: Label
+      placeholder: optional-short-name
