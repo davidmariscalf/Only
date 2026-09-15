@@ -19,17 +19,18 @@ on:
   issues:
     types: [opened]
 
-permissions:
-  contents: read
-  issues: write
-
 jobs:
   capture-dispatch:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Capture
@@ -43,11 +44,12 @@ jobs:
           else
             if [ -n "$LABEL" ]; then PYTHONPATH=src python -m onlylab.cli url "$TARGET" --label "$LABEL"; else PYTHONPATH=src python -m onlylab.cli url "$TARGET"; fi
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: only-capture-${{ github.run_id }}
           path: captures/
           if-no-files-found: error
+          retention-days: 30
 
   capture-issue:
     if: >-
@@ -55,23 +57,29 @@ jobs:
       github.event.issue.user.login == github.repository_owner &&
       startsWith(github.event.issue.title, '[only]')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Capture from owner issue
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: PYTHONPATH=src python -m onlylab.issue "$ISSUE_BODY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: only-capture-${{ github.run_id }}
           path: captures/
           if-no-files-found: error
+          retention-days: 30
       - name: Comment run link
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ github.event.issue.number }}
-        run: >-
-          gh issue comment "$ISSUE" --body "Capture created. Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: gh issue comment "$ISSUE" --body "Capture created. Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

@@ -2,21 +2,26 @@
 
 **Capture first. Interpret second.**
 
-Only builds small, tamper-evident evidence capsules from a web URL, a public Git repository, or a local file. It records what it actually saw, hashes every evidence file, and can later verify that the capsule has not drifted.
+Only creates evidence capsules from public web URLs, public HTTP(S) Git repositories, and local files. It records what it actually observed, hashes every evidence artifact, and verifies capsule consistency later.
 
-The constraint that shaped the project is deliberate: **inspect untrusted things without executing them**. Repository capture never runs project code, package managers, build scripts, hooks, tests, or submodules.
+The design rule is narrow on purpose: **untrusted content is data, never code**.
 
-## Why this exists
+## What Only protects against
 
-Research, debugging and AI-assisted work often collapse three different things into one:
+Only is built to reduce accidental trust in changing or untrusted sources:
 
-1. what a source actually contained,
-2. what a tool inferred from it,
-3. what a person or model concluded.
+- URL requests are restricted to globally routable addresses.
+- DNS is pinned to the validated address set for each HTTP hop.
+- Redirects are revalidated and capped.
+- Git clones use `http.curloptResolve` to pin validated DNS results.
+- Git system/global configuration is ignored during acquisition.
+- Git credential prompting is disabled.
+- Repository submodules are not initialized.
+- Repository symlinks are recorded but never followed.
+- Capsule verification rejects symlinks, path traversal, duplicate entries, undeclared files, size drift, and hash drift.
+- `diff` refuses to compare capsules that fail verification.
 
-Only preserves step 1 in a boring, inspectable form so steps 2 and 3 can be challenged later.
-
-This is not a truth engine, vulnerability scanner, crawler, or malware sandbox. It is an evidence capture and provenance utility.
+Only does **not** prove that a source is truthful and does not authenticate a capsule by itself. A malicious party that can replace both the evidence and its manifest can recompute the hashes. For authenticity, keep the printed `manifest_sha256` somewhere independent. GitHub Actions artifacts also expose an external artifact digest.
 
 ## Install
 
@@ -24,54 +29,91 @@ This is not a truth engine, vulnerability scanner, crawler, or malware sandbox. 
 python -m pip install -e .
 ```
 
-Python 3.10+ and Git are enough. The package has no runtime Python dependencies.
+Python 3.10+ and Git are required. Only has no runtime Python dependencies.
 
-## Use
-
-### Capture a URL
+## Capture a URL
 
 ```bash
 only url https://example.com
 ```
 
-The capsule includes the raw response body, headers, DNS data, TLS certificate fingerprint when applicable, parsed HTML facts, a human-readable report, and a manifest containing SHA-256 hashes.
+The output includes:
 
-### Inspect a public repository without running it
+- raw response bytes, capped at 10 MiB
+- HTTP headers with duplicate headers preserved
+- redirect, DNS, connected-peer, and TLS facts
+- bounded HTML facts when the body is HTML
+- a report
+- a manifest with SHA-256 hashes
+
+Only follows at most five redirects. Every redirect destination is checked independently before a connection is made.
+
+## Inspect a public repository
 
 ```bash
 only repo https://github.com/owner/repository
 ```
 
-Only makes a shallow clone, does **not** initialize submodules, inventories files and hashes, detects common dependency/build manifests, and records TODO/FIXME/HACK/XXX markers. It executes none of the repository's code.
+Only performs a shallow HTTP(S) clone and records:
 
-### Capture a local artifact
+- exact HEAD commit
+- tracked-file count
+- up to 20,000 inventory entries
+- Git mode and object ID
+- SHA-256 for regular files
+- symlink targets without dereferencing them
+- gitlinks without initializing submodules
+- common dependency/build manifests
+- up to 500 TODO/FIXME/HACK/XXX markers
+- whether any inventory was truncated
+
+Repository-controlled code, hooks, package managers, build scripts, tests, and submodules are not executed.
+
+## Capture a local file
 
 ```bash
 only file ./paper.pdf
 ```
 
-### Verify a capsule
+Local symlinks are refused. The capsule contains a regular copied artifact.
+
+## Verify
 
 ```bash
 only verify captures/20260915T202300Z-example.com
 ```
 
-Any changed, missing, or undeclared evidence file makes verification fail.
+A successful verification prints the current manifest digest:
 
-### Compare two captures
+```text
+OK manifest_sha256=<64 hex characters>
+```
+
+Verification checks internal consistency. Preserve that digest independently if you need an authenticity anchor.
+
+## Get a capsule digest
+
+```bash
+only digest captures/20260915T202300Z-example.com
+```
+
+## Compare two capsules
 
 ```bash
 only diff captures/old captures/new
 ```
 
-This reports added, removed, and modified evidence artifacts from their manifests.
+Both capsules must verify first. The diff output includes each manifest digest.
 
-## Use it from GitHub without changing the repository
+## Use from GitHub
 
-There are two preconfigured paths:
+### Manual workflow
 
-- **Actions → Only Capture → Run workflow** for a URL or public repository.
-- Open an owner-authored issue whose title begins with `[only]` and whose body contains:
+Open **Actions → Only Capture → Run workflow** and provide a public URL or repository.
+
+### Owner-authored issue
+
+Open an issue whose title begins with `[only]` and use:
 
 ```text
 kind: url
@@ -87,7 +129,7 @@ target: https://github.com/owner/repository
 label: repository
 ```
 
-The issue-triggered workflow is intentionally restricted to the repository owner so a public issue cannot be used to burn Actions minutes. Captures are uploaded as workflow artifacts and the issue receives the run link.
+The issue-triggered workflow runs only for issues authored by the repository owner. The resulting capsule is uploaded as a workflow artifact and the bot comments with the run link.
 
 ## Capsule shape
 
@@ -95,21 +137,35 @@ The issue-triggered workflow is intentionally restricted to the repository owner
 captures/<timestamp>-<label>/
 ├── REPORT.md
 ├── manifest.json
-├── ... evidence files ...
+└── evidence files
 ```
 
-`manifest.json` is the trust anchor for the capsule: it lists every evidence file, its byte length, and its SHA-256 digest. `only verify` recalculates all of them and rejects undeclared files.
+The manifest records the evidence path, byte length, and SHA-256. The manifest's own SHA-256 is the compact capsule identifier printed by the CLI.
 
-## Design rules
+## Bounded acquisition
 
-- **No remote code execution by design.** A cloned repository is data, never a program.
-- **No hidden AI step.** Only captures facts and leaves interpretation explicit.
-- **No API keys required.** The default workflows use only GitHub-provided infrastructure.
-- **Bounded acquisition.** URL bodies are capped at 10 MiB; repository inventory is capped at 20,000 files; large files are not text-scanned.
-- **Useful failure.** Network and TLS facts are recorded separately so partial captures remain understandable.
+Only deliberately caps work rather than pretending every target can be exhaustively captured:
 
-## Limits
+- URL body: 10 MiB
+- redirects: 5
+- repository inventory: 20,000 tracked entries
+- marker results: 500
+- HTML links: 10,000
+- HTML script references: 2,000
+- HTML metadata entries: 1,000
 
-A hash proves that a file did not change after the manifest was produced; it does not prove that the source was truthful. DNS and TLS observations are point-in-time network observations. Dynamic pages may return different content to different clients. Repository capture sees one shallow HEAD snapshot. Only does not render JavaScript or crawl linked pages.
+Truncation is recorded.
 
-Those limits are features as much as omissions: the tool tries to make a narrow promise it can actually keep.
+## Non-goals
+
+Only is not:
+
+- a truth engine
+- a browser or JavaScript renderer
+- a full website crawler
+- a malware sandbox
+- a vulnerability scanner
+- a cryptographic signature system
+- an archival service
+
+Its job is smaller: acquire bounded evidence without executing target-controlled code, make the acquisition policy explicit, and make later silent drift detectable when the manifest digest is anchored externally.

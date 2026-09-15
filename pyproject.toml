@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "onlylab"
-version = "0.1.0"
-description = "Build tamper-evident evidence capsules from URLs, repositories, and files without executing untrusted code."
+version = "0.2.0"
+description = "Build bounded evidence capsules from public URLs, repositories, and local files without executing target-controlled code."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
-authors = [{name = "Only"}]
+authors = [{name = "David Mariscal Fernández"}]
 keywords = ["evidence", "provenance", "reproducibility", "forensics", "research"]
 classifiers = [
   "Programming Language :: Python :: 3",
