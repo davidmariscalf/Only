@@ -73,4 +73,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ github.event.issue.number }}
-        run: gh issue comment "$ISSUE" --body "Capture created. Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: >-
+          gh issue comment "$ISSUE" --body "Capture created. Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
