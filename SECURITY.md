@@ -10,7 +10,7 @@ For repository capture, Only accepts HTTP(S) Git URLs only. It validates the des
 
 Repository symlinks are never dereferenced. Their link text is hashed as data. Gitlinks are recorded as Git object references without initialization.
 
-The GitHub workflow additionally sets `GIT_ASKPASS`/`SSH_ASKPASS` to `/bin/false`, clears proxy environment variables, pins third-party Actions by commit SHA, and does not persist checkout credentials.
+The CLI and Issue entrypoints additionally scrub inherited `GIT_*`/`GCM_*` variables, proxy variables, SSH agent variables, and CA override variables for the duration of repository acquisition, then restore the caller's environment. The GitHub workflow also disables askpass helpers, pins third-party Actions by commit SHA, and does not persist checkout credentials.
 
 ## Capsule verification
 
@@ -26,8 +26,10 @@ For Issue-triggered GitHub captures, the bot stores the manifest digest and GitH
 
 ## Remaining limits
 
-Only still relies on the local Python, Git, operating system, CA trust store, process environment, and GitHub Actions runner when used there. A shallow clone can still consume significant bandwidth or disk before the bounded inventory stage. Only does not sandbox Git itself.
+Only still relies on the local Python interpreter, Git executable, operating system, CA trust store, executable search path, and GitHub Actions runner when used there. A shallow clone can still consume significant bandwidth or disk before the bounded inventory stage. Only does not sandbox Git itself.
 
-Local callers should treat inherited Git-specific environment variables as part of the trusted execution environment. For highly hostile acquisition, run Only inside an isolated account/container with a minimal environment.
+Direct Python callers that invoke `onlylab.core.capture_repo` instead of the CLI are lower-level API users and are responsible for providing a trusted process environment; the public CLI and Issue automation apply the environment scrub automatically.
+
+For highly hostile acquisition, run Only inside an isolated account/container with a minimal trusted runtime.
 
 Do not use Only as a malware execution environment. It intentionally never runs captured code.

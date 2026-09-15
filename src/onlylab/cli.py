@@ -15,6 +15,7 @@ from .core import (
     diff_capsules,
     verify_capsule,
 )
+from .environment import isolated_git_environment
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -78,7 +79,8 @@ def main(argv: list[str] | None = None) -> int:
             _created(ref)
             return 0
         if args.command == "repo":
-            ref = capture_repo(args.target, args.out, args.label)
+            with isolated_git_environment():
+                ref = capture_repo(args.target, args.out, args.label)
             _created(ref)
             return 0
         if args.command == "file":

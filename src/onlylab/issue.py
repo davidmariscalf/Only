@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from .core import OnlyError, capsule_digest, capture_repo, capture_url
+from .environment import isolated_git_environment
 
 _EMPTY = {"_no response_", "no response", "none", "n/a"}
 
@@ -56,7 +57,8 @@ def main(argv: list[str] | None = None) -> int:
         if kind == "url":
             ref = capture_url(target, out, label)
         elif kind == "repo":
-            ref = capture_repo(target, out, label)
+            with isolated_git_environment():
+                ref = capture_repo(target, out, label)
         else:
             raise OnlyError("kind must be url or repo")
     except (OnlyError, OSError) as exc:

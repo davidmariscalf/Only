@@ -10,7 +10,7 @@ Only tries to protect four things: files and credentials on the machine running 
 
 Assume the target URL or repository can be malicious. It may control HTTP status, headers, response bytes, redirects, DNS answers for its own hostname, repository filenames and bytes, symlinks, Git metadata/history, and pathological content designed to consume resources.
 
-Do not assume the target controls the local operating system, Python interpreter, Git binary, CA store, GitHub platform, or the user's account. Those remain part of the trusted computing base.
+Do not assume the target controls the local operating system, Python interpreter, Git executable, CA store, GitHub platform, or the user's account. Those remain part of the trusted computing base.
 
 ## Network boundary
 
@@ -18,7 +18,7 @@ URL acquisition resolves every destination and refuses any resolution set contai
 
 Git acquisition validates the destination and pins libcurl resolution with `http.curloptResolve`. Redirects are disabled. System/global Git configuration is ignored and configured HTTP proxy/credential helpers are cleared.
 
-The GitHub workflow further disables askpass helpers and proxy environment variables. A local caller's process environment remains part of the trusted execution environment.
+The public CLI and Issue entrypoints temporarily remove inherited `GIT_*`/`GCM_*`, proxy, SSH-agent, and CA-override variables before repository capture and restore them afterwards. This blocks process-level config injection such as `GIT_CONFIG_COUNT`, custom askpass helpers, or inherited network proxies on those surfaces. Direct low-level Python callers remain responsible for their process environment.
 
 ## Filesystem boundary
 
