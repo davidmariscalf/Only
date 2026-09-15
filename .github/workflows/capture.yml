@@ -19,6 +19,15 @@ on:
   issues:
     types: [opened]
 
+permissions: {}
+
+env:
+  GIT_ASKPASS: /bin/false
+  SSH_ASKPASS: /bin/false
+  HTTP_PROXY: ""
+  HTTPS_PROXY: ""
+  ALL_PROXY: ""
+
 jobs:
   capture-dispatch:
     if: github.event_name == 'workflow_dispatch'
@@ -34,22 +43,32 @@ jobs:
         with:
           python-version: "3.12"
       - name: Capture
+        id: capture
         env:
           KIND: ${{ inputs.kind }}
           TARGET: ${{ inputs.target }}
           LABEL: ${{ inputs.label }}
         run: |
+          set -euo pipefail
           if [ "$KIND" = "repo" ]; then
             if [ -n "$LABEL" ]; then PYTHONPATH=src python -m onlylab.cli repo "$TARGET" --label "$LABEL"; else PYTHONPATH=src python -m onlylab.cli repo "$TARGET"; fi
           else
             if [ -n "$LABEL" ]; then PYTHONPATH=src python -m onlylab.cli url "$TARGET" --label "$LABEL"; else PYTHONPATH=src python -m onlylab.cli url "$TARGET"; fi
-          fi
+          fi | tee /tmp/only-output.txt
+          DIGEST="$(sed -n 's/^manifest_sha256=//p' /tmp/only-output.txt | tail -n 1)"
+          test "${#DIGEST}" -eq 64
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "### Only capture" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`manifest_sha256=$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        id: artifact
         with:
           name: only-capture-${{ github.run_id }}
           path: captures/
           if-no-files-found: error
           retention-days: 30
+      - name: Record artifact digest
+        run: echo "artifact_digest=${{ steps.artifact.outputs.artifact-digest }}" >> "$GITHUB_STEP_SUMMARY"
 
   capture-issue:
     if: >-
@@ -69,18 +88,27 @@ jobs:
         with:
           python-version: "3.12"
       - name: Capture from owner issue
+        id: capture
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
-        run: PYTHONPATH=src python -m onlylab.issue "$ISSUE_BODY"
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m onlylab.issue "$ISSUE_BODY" | tee /tmp/only-output.txt
+          DIGEST="$(sed -n 's/^manifest_sha256=//p' /tmp/only-output.txt | tail -n 1)"
+          test "${#DIGEST}" -eq 64
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        id: artifact
         with:
           name: only-capture-${{ github.run_id }}
           path: captures/
           if-no-files-found: error
           retention-days: 30
-      - name: Comment run link
+      - name: Comment run link and integrity anchors
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ github.event.issue.number }}
+          MANIFEST_DIGEST: ${{ steps.capture.outputs.digest }}
+          ARTIFACT_DIGEST: ${{ steps.artifact.outputs.artifact-digest }}
         run: >-
-          gh issue comment "$ISSUE" --body "Capture created. Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh issue comment "$ISSUE" --body "Capture created. Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} | manifest_sha256=$MANIFEST_DIGEST | artifact_digest=$ARTIFACT_DIGEST"

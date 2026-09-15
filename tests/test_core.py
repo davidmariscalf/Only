@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
+from onlylab.cli import main as cli_main
 from onlylab.core import (
     OnlyError,
     _new,
@@ -42,6 +45,27 @@ class CoreTests(unittest.TestCase):
             self.assertFalse(ok)
             self.assertTrue(any("mismatch" in x for x in problems))
 
+    def test_cli_can_verify_external_digest(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            src = root / "a.txt"
+            src.write_text("alpha", encoding="utf-8")
+            capsule = Path(capture_file(src, root / "out"))
+            digest = capsule_digest(capsule)
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                rc = cli_main(["verify", str(capsule), "--expect", digest])
+            self.assertEqual(rc, 0, stderr.getvalue())
+            self.assertIn("external_anchor=matched", stdout.getvalue())
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                rc = cli_main(["verify", str(capsule), "--expect", "0" * 64])
+            self.assertEqual(rc, 1)
+            self.assertIn("fingerprint mismatch", stderr.getvalue())
+
     def test_diff_capsules(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -51,9 +75,7 @@ class CoreTests(unittest.TestCase):
             src.write_text("two", encoding="utf-8")
             b = Path(capture_file(src, root / "b"))
             diff = diff_capsules(a, b)
-            self.assertTrue(
-                any(x["path"] == "artifact.bin" and x["change"] == "modified" for x in diff["changes"])
-            )
+            self.assertTrue(any(x["path"] == "artifact.bin" and x["change"] == "modified" for x in diff["changes"]))
             self.assertEqual(len(diff["left"]["manifest_sha256"]), 64)
 
     def test_diff_refuses_tampered_capsule(self):
@@ -81,17 +103,7 @@ class CoreTests(unittest.TestCase):
             capsule = root / "capsule"
             capsule.mkdir()
             (capsule / "manifest.json").write_text(
-                json.dumps(
-                    {
-                        "evidence": [
-                            {
-                                "path": "../outside.txt",
-                                "bytes": 1,
-                                "sha256": "0" * 64,
-                            }
-                        ]
-                    }
-                ),
+                json.dumps({"evidence": [{"path": "../outside.txt", "bytes": 1, "sha256": "0" * 64}]}),
                 encoding="utf-8",
             )
             ok, problems = verify_capsule(capsule)
@@ -109,17 +121,7 @@ class CoreTests(unittest.TestCase):
             link = capsule / "evidence.txt"
             link.symlink_to(outside)
             (capsule / "manifest.json").write_text(
-                json.dumps(
-                    {
-                        "evidence": [
-                            {
-                                "path": "evidence.txt",
-                                "bytes": len("secret"),
-                                "sha256": "0" * 64,
-                            }
-                        ]
-                    }
-                ),
+                json.dumps({"evidence": [{"path": "evidence.txt", "bytes": len("secret"), "sha256": "0" * 64}]}),
                 encoding="utf-8",
             )
             ok, problems = verify_capsule(capsule)
@@ -151,33 +153,23 @@ class CoreTests(unittest.TestCase):
             self.assertTrue(second.name.endswith("-2"))
 
     def test_parse_ls_files_stage_handles_symlink_and_gitlink(self):
-        raw = (
-            b"100644 abcdef 0\tREADME.md\0"
-            b"120000 123456 0\tlink\0"
-            b"160000 fedcba 0\tvendor/submodule\0"
-        )
+        raw = b"100644 abcdef 0\tREADME.md\0" b"120000 123456 0\tlink\0" b"160000 fedcba 0\tvendor/submodule\0"
         self.assertEqual(
             _parse_ls_files_stage(raw),
-            [
-                ("100644", "abcdef", "README.md"),
-                ("120000", "123456", "link"),
-                ("160000", "fedcba", "vendor/submodule"),
-            ],
+            [("100644", "abcdef", "README.md"), ("120000", "123456", "link"), ("160000", "fedcba", "vendor/submodule")],
         )
 
     def test_issue_form_parser(self):
-        body = (
-            "### Kind\n\nrepo\n\n### Target\n\n"
-            "https://github.com/openai/openai-python\n\n### Label\n\nsdk"
-        )
-        self.assertEqual(
-            parse_body(body),
-            {
-                "kind": "repo",
-                "target": "https://github.com/openai/openai-python",
-                "label": "sdk",
-            },
-        )
+        body = "### Kind\n\nrepo\n\n### Target\n\nhttps://github.com/openai/openai-python\n\n### Label\n\nsdk"
+        self.assertEqual(parse_body(body), {"kind": "repo", "target": "https://github.com/openai/openai-python", "label": "sdk"})
+
+    def test_issue_form_parser_ignores_empty_optional_label(self):
+        body = "### Kind\n\nrepo\n\n### Target\n\nhttps://github.com/openai/openai-python\n\n### Label\n\n_No response_"
+        self.assertEqual(parse_body(body), {"kind": "repo", "target": "https://github.com/openai/openai-python"})
+
+    def test_issue_parser_does_not_consume_next_heading(self):
+        body = "### Label\n\n### Target\n\nhttps://example.com"
+        self.assertEqual(parse_body(body), {"target": "https://example.com"})
 
 
 if __name__ == "__main__":

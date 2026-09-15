@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -38,6 +39,11 @@ def _parser() -> argparse.ArgumentParser:
 
     verify = sub.add_parser("verify", help="verify a capsule's declared evidence")
     verify.add_argument("capsule", type=Path)
+    verify.add_argument(
+        "--expect",
+        metavar="SHA256",
+        help="require an externally retained manifest SHA-256 to match",
+    )
 
     digest = sub.add_parser("digest", help="print the SHA-256 digest of a capsule manifest")
     digest.add_argument("capsule", type=Path)
@@ -51,6 +57,17 @@ def _parser() -> argparse.ArgumentParser:
 def _created(ref: Path) -> None:
     print(ref)
     print(f"manifest_sha256={capsule_digest(ref)}")
+
+
+def _expected_digest(value: str) -> str:
+    candidate = value.strip().lower()
+    for prefix in ("sha256:", "manifest_sha256="):
+        if candidate.startswith(prefix):
+            candidate = candidate[len(prefix):].strip()
+            break
+    if not re.fullmatch(r"[0-9a-f]{64}", candidate):
+        raise OnlyError("--expect must be a 64-character SHA-256 digest")
+    return candidate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -70,12 +87,23 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "verify":
             ok, problems = verify_capsule(args.capsule)
-            if ok:
-                print(f"OK manifest_sha256={capsule_digest(args.capsule)}")
-                return 0
-            for problem in problems:
-                print(problem, file=sys.stderr)
-            return 1
+            if not ok:
+                for problem in problems:
+                    print(problem, file=sys.stderr)
+                return 1
+            actual = capsule_digest(args.capsule)
+            if args.expect:
+                expected = _expected_digest(args.expect)
+                if actual != expected:
+                    print(
+                        f"manifest fingerprint mismatch: expected {expected}, got {actual}",
+                        file=sys.stderr,
+                    )
+                    return 1
+                print(f"OK manifest_sha256={actual} external_anchor=matched")
+            else:
+                print(f"OK manifest_sha256={actual}")
+            return 0
         if args.command == "digest":
             print(capsule_digest(args.capsule))
             return 0
