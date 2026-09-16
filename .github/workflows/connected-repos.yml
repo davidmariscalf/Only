@@ -1,0 +1,72 @@
+name: Connected Repos Capture
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  GIT_ASKPASS: /bin/false
+  SSH_ASKPASS: /bin/false
+  HTTP_PROXY: ""
+  HTTPS_PROXY: ""
+  ALL_PROXY: ""
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        repo:
+          - slug: public-apis
+            url: https://github.com/public-apis/public-apis
+          - slug: awesome-mcp-servers
+            url: https://github.com/punkpeye/awesome-mcp-servers
+          - slug: awesome-llm-apps
+            url: https://github.com/Shubhamsaboo/awesome-llm-apps
+          - slug: awesome
+            url: https://github.com/sindresorhus/awesome
+          - slug: scrapling
+            url: https://github.com/D4Vinci/Scrapling
+          - slug: free-for-dev
+            url: https://github.com/ripienaar/free-for-dev
+          - slug: langflow
+            url: https://github.com/langflow-ai/langflow
+          - slug: openhands
+            url: https://github.com/All-Hands-AI/OpenHands
+          - slug: agency-agents
+            url: https://github.com/msitarzewski/agency-agents
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Capture connected repository
+        id: capture
+        env:
+          TARGET: ${{ matrix.repo.url }}
+          LABEL: ${{ matrix.repo.slug }}
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m onlylab.cli repo "$TARGET" --label "$LABEL" | tee /tmp/only-output.txt
+          DIGEST="$(sed -n 's/^manifest_sha256=//p' /tmp/only-output.txt | tail -n 1)"
+          test "${#DIGEST}" -eq 64
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "### $LABEL" >> "$GITHUB_STEP_SUMMARY"
+          echo "source=$TARGET" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`manifest_sha256=$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        id: artifact
+        with:
+          name: only-connected-${{ matrix.repo.slug }}-${{ github.run_id }}
+          path: captures/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Record artifact digest
+        run: echo "artifact_digest=${{ steps.artifact.outputs.artifact-digest }}" >> "$GITHUB_STEP_SUMMARY"

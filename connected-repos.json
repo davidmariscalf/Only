@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "policy": "reference-only",
+  "description": "Curated public repositories that Only may capture as untrusted evidence. Their code is never executed by this integration.",
+  "repositories": [
+    {
+      "slug": "public-apis",
+      "repository": "public-apis/public-apis",
+      "url": "https://github.com/public-apis/public-apis",
+      "category": "api-catalog",
+      "use": "Discover public APIs when a project needs an external data source."
+    },
+    {
+      "slug": "awesome-mcp-servers",
+      "repository": "punkpeye/awesome-mcp-servers",
+      "url": "https://github.com/punkpeye/awesome-mcp-servers",
+      "category": "mcp-catalog",
+      "use": "Discover MCP servers and integration patterns."
+    },
+    {
+      "slug": "awesome-llm-apps",
+      "repository": "Shubhamsaboo/awesome-llm-apps",
+      "url": "https://github.com/Shubhamsaboo/awesome-llm-apps",
+      "category": "ai-reference",
+      "use": "Reference implementations for agents, RAG and LLM applications."
+    },
+    {
+      "slug": "awesome",
+      "repository": "sindresorhus/awesome",
+      "url": "https://github.com/sindresorhus/awesome",
+      "category": "resource-index",
+      "use": "Broad index of curated technical resource lists."
+    },
+    {
+      "slug": "scrapling",
+      "repository": "D4Vinci/Scrapling",
+      "url": "https://github.com/D4Vinci/Scrapling",
+      "category": "web-data",
+      "use": "Reference web extraction patterns and tooling; never auto-run against targets."
+    },
+    {
+      "slug": "free-for-dev",
+      "repository": "ripienaar/free-for-dev",
+      "url": "https://github.com/ripienaar/free-for-dev",
+      "category": "infrastructure-catalog",
+      "use": "Find free tiers and developer services for prototypes and deployments."
+    },
+    {
+      "slug": "langflow",
+      "repository": "langflow-ai/langflow",
+      "url": "https://github.com/langflow-ai/langflow",
+      "category": "agent-workflows",
+      "use": "Reference visual agent, RAG and MCP workflow patterns."
+    },
+    {
+      "slug": "openhands",
+      "repository": "All-Hands-AI/OpenHands",
+      "url": "https://github.com/All-Hands-AI/OpenHands",
+      "category": "coding-agents",
+      "use": "Reference architecture and patterns for autonomous coding agents."
+    },
+    {
+      "slug": "agency-agents",
+      "repository": "msitarzewski/agency-agents",
+      "url": "https://github.com/msitarzewski/agency-agents",
+      "category": "agent-library",
+      "use": "Reference role and skill definitions for specialized agents."
+    }
+  ]
+}
